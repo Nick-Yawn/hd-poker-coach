@@ -152,6 +152,28 @@ def test_interpret_assigns_bets_to_nearest_seat():
     assert bets["maxfreddie"] == 250.0
 
 
+def test_interpret_excludes_ui_labels_as_seats():
+    # Street / pot labels OCR'd in the play area must not become phantom seats.
+    tokens = [
+        _tok("RIVER", 0.50, 0.40), _tok("60K", 0.50, 0.43),
+        _tok("MAINPOT", 0.55, 0.55), _tok("30K", 0.55, 0.57),
+        _tok("SlowBet25", 0.50, 0.80), _tok("160.5K", 0.50, 0.82),
+    ]
+    st = interpret(tokens, hero_name="SlowBet25")
+    assert {s.name for s in st.seats} == {"SlowBet25"}
+
+
+def test_interpret_filters_tiny_bets_as_noise():
+    # A stray small number near a seat (at 250/500 stakes) is not a real bet.
+    tokens = [
+        _tok("250/500", 0.10, 0.09),
+        _tok("SlowBet25", 0.50, 0.80), _tok("160.5K", 0.50, 0.82),
+        _tok("2", 0.50, 0.68),
+    ]
+    st = interpret(tokens, hero_name="SlowBet25")
+    assert st.seats[0].bet is None
+
+
 def test_interpret_stack_not_misread_as_bet():
     # The stack below a name must not also be claimed as a bet.
     tokens = [

@@ -163,21 +163,24 @@ class HandTracker:
 
     # -- lifecycle ---------------------------------------------------------- #
     def _maybe_start_hand(self, state: TableState, board: list[str] | None) -> None:
-        # A new hand begins at confirmed preflop (empty board) with blinds posted.
+        # A new hand begins at confirmed preflop (empty board) with the big blind
+        # posted. We anchor on the BB alone — it's the larger, more reliably-read
+        # pill, and it fixes every position (button = 2 seats before BB) without
+        # needing to also catch the small blind in the same frame.
         if board is None or len(board) != 0:
             return
         if not state.big_blind:
             return
         posters = [s for s in state.seats if s.bet and s.bet > 0]
-        sb = next((s for s in posters if _close(s.bet, state.small_blind)), None)
         bb = next((s for s in posters if _close(s.bet, state.big_blind)), None)
-        if sb is None or bb is None:
+        if bb is None:
             return
+        sb = next((s for s in posters if _close(s.bet, state.small_blind)), None)
 
         players = self._roster(state)
         if len(players) < 2:
             return
-        self._assign_positions(players, sb_name=sb.name, bb_name=bb.name)
+        self._assign_positions(players, bb_name=bb.name)
 
         hand = _Hand(
             small_blind=state.small_blind,
@@ -210,15 +213,16 @@ class HandTracker:
             )
         return players
 
-    def _assign_positions(self, players: list[_Player], *, sb_name, bb_name) -> None:
+    def _assign_positions(self, players: list[_Player], *, bb_name) -> None:
         n = len(players)
         names = _POSITIONS.get(n)
         if not names:
             return
-        # players are clockwise; find SB, then button is the seat before it.
+        # players are clockwise; find BB, then walk back to the button. Heads-up
+        # the button is the SB (1 before BB); otherwise it's 2 before BB.
         order = players  # already clockwise by _roster
-        sb_idx = max(range(n), key=lambda i: name_similarity(order[i].name, sb_name))
-        button_idx = (sb_idx - 1) % n
+        bb_idx = max(range(n), key=lambda i: name_similarity(order[i].name, bb_name))
+        button_idx = (bb_idx - (1 if n == 2 else 2)) % n
         for offset in range(n):
             p = order[(button_idx + offset) % n]
             p.position = names[offset]

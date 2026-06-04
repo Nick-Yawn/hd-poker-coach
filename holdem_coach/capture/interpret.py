@@ -42,8 +42,11 @@ _ACTIONS = {
 # UI chrome that is never a player name.
 _STOPWORDS = {
     "HOME", "LOBBY", "PLAY", "STORE", "FREE BONUS", "HD POKER", "HDPOKER",
-    "MAIN POT", "POT", "SIDE POT", "HIT ENTER TO CHAT", "HITENTERTOCHAT",
-    "SHOW", "MUCK", "WAITING", "SITTING OUT", "SIT OUT",
+    "MAIN POT", "MAINPOT", "POT", "SIDE POT", "SIDEPOT", "HIT ENTER TO CHAT",
+    "HITENTERTOCHAT", "SHOW", "MUCK", "WAITING", "SITTING OUT", "SIT OUT",
+    # street / action-button labels that OCR can otherwise read as a name
+    "PREFLOP", "FLOP", "TURN", "RIVER", "ALL IN", "ALLIN", "RAISE TO",
+    "RAISETO", "ANY", "CALL ANY", "BET", "WIN", "WINNER",
 }
 
 
@@ -127,7 +130,8 @@ def interpret(
     # Pot: an amount adjacent to a 'MAIN POT'/'POT' label, else skip.
     pot_tok = None
     pot_label = next(
-        (t for t in body if t.text.strip().upper() in ("MAIN POT", "POT")), None
+        (t for t in body
+         if t.text.strip().upper() in ("MAIN POT", "MAINPOT", "POT")), None
     )
     if pot_label is not None:
         amounts = [
@@ -175,9 +179,13 @@ def interpret(
     claimed = set(used_amounts)
     if pot_tok is not None:
         claimed.add(id(pot_tok))
+    # A real wager is at least about a small blind; anything tinier (a stray '2'
+    # or '6' OCR'd off a chip graphic) is noise, not a bet.
+    bet_floor = max(1.0, (state.small_blind or 0.0) * 0.5)
     bet_candidates = [
         t for t in amount_tokens
         if id(t) not in claimed and 0.18 < t.cy < 0.82
+        and (parse_amount(t.text) or 0.0) >= bet_floor
     ]
     pairs = []
     for si, seat in enumerate(seats):
