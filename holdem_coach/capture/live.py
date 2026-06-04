@@ -37,6 +37,7 @@ def run_tracker(
     seconds: float | None = None,
     confirm_frames: int = 3,
     loop_interval: float = 0.15,
+    on_state=None,
 ) -> int:
     """Drive the tracker over the live window. Returns the number of hands seen.
 
@@ -61,6 +62,8 @@ def run_tracker(
                 frame = grabber.grab()
                 if gate.changed(frame):  # re-OCR only on change
                     last_state = recognize_state(frame, hero_name)
+                    if on_state is not None:
+                        on_state(last_state)
                 if last_state is not None:
                     record = tracker.observe(last_state, time.monotonic())
 

@@ -127,6 +127,14 @@ class HandTracker:
             self._maybe_start_hand(state, board)
             return None
 
+        # Robustness: a confirmed EMPTY board after we'd reached a flop+ means the
+        # previous hand ended (we likely missed the chat 'won'). Drop the stuck
+        # hand and let a fresh one start, so a missed end can't wedge the tracker.
+        if board is not None and len(board) == 0 and len(self._hand.board) >= 3:
+            self._hand = None
+            self._maybe_start_hand(state, board)
+            return None
+
         self._apply_to_hand(state, board)
 
         finished = self._check_hand_end(state)
@@ -186,6 +194,9 @@ class HandTracker:
                 )
                 hand.committed["preflop"][p.name] = s.bet
         self._hand = hand
+        # The chat feed still shows PREVIOUS hands' "won" lines. Mark everything
+        # currently visible as seen so only a genuinely new win ends THIS hand.
+        self._seen_chat.update(state.chat)
 
     def _roster(self, state: TableState) -> list[_Player]:
         """Seats with a known stack become players, numbered clockwise."""
@@ -275,16 +286,21 @@ class HandTracker:
 
         winner = hand.player_by_name(winner_name)
         won = parse_amount(won_text.replace(" ", "")) or 0.0
-        pot = sum(a["amount"] for a in hand.actions)
+        # Prefer the chat-reported amount as the pot; fall back to summing actions
+        # only if the chat amount didn't parse (action sums are noisy live).
+        pot = won if won > 0 else sum(a["amount"] for a in hand.actions)
 
         hero = next((p for p in hand.players if p.is_hero), None)
         hero_contrib = sum(
-            a["amount"] for a in hand.actions if hero and a["seat"] == hero.seat
+            a["amount"] for a in hand.actions
+            if hero and a["seat"] == hero.seat and a["action"] != "fold"
         )
         hero_net = 0.0
         if hero is not None:
-            hero_won = won if (winner and winner.seat == hero.seat) else 0.0
-            hero_net = hero_won - hero_contrib
+            if winner and winner.seat == hero.seat:
+                hero_net = won - hero_contrib  # collected the pot
+            else:
+                hero_net = -hero_contrib
 
         button = next((p for p in hand.players if p.position == "BTN"), None)
         flop = hand.board[0:3]

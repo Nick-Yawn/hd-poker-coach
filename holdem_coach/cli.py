@@ -123,6 +123,18 @@ def _run_track(args) -> int:
             return
         print("\n" + review, flush=True)
 
+    seen_chat: set[str] = set()
+
+    def on_state(state):
+        for line in state.chat:
+            if line not in seen_chat:
+                seen_chat.add(line)
+                print(f"   chat» {line}", flush=True)
+        bets = {s.name: s.bet for s in state.seats if s.bet}
+        blinds = f"{state.small_blind}/{state.big_blind}"
+        print(f"   [state] blinds={blinds} board={state.board} bets={bets}",
+              flush=True)
+
     print(
         f"Tracking '{args.window}' as {args.hero!r}. Post-hand reviews print here "
         "when each hand ends. Ctrl+C to stop.",
@@ -131,7 +143,7 @@ def _run_track(args) -> int:
     try:
         n = run_tracker(
             args.window, hero_name=args.hero, on_hand=on_hand, on_event=on_event,
-            seconds=args.seconds,
+            seconds=args.seconds, on_state=on_state if args.debug else None,
         )
     except KeyboardInterrupt:
         n = None
@@ -369,6 +381,8 @@ def main(argv: list[str] | None = None) -> int:
     p_track.add_argument("--iterations", type=int, default=4000, help="equity MC iters")
     p_track.add_argument("--seed", type=int, default=1234, help="equity RNG seed")
     p_track.add_argument("--llm", action="store_true", help="real Anthropic coaching")
+    p_track.add_argument("--debug", action="store_true",
+                         help="log the live recognition stream (chat, blinds, bets)")
 
     p_over = sub.add_parser(
         "overlay", help="transparent on-table overlay of detections (click-through)"
