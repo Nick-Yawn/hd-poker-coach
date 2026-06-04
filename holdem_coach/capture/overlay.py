@@ -44,18 +44,22 @@ class Overlay:
 
     # -- worker: grab + recognize, publish latest --------------------------- #
     def _worker(self) -> None:
+        from .changegate import ChangeGate
         from .grabber import WindowGrabber
         from .viewer import recognize
 
+        gate = ChangeGate()
         try:
             with WindowGrabber(self.window_substr) as grabber:
                 while not self._stop.is_set():
                     try:
-                        result = recognize(grabber.grab(), hero_name=self.hero_name)
+                        frame = grabber.grab()
+                        if gate.changed(frame):  # skip OCR on static frames
+                            result = recognize(frame, hero_name=self.hero_name)
+                            with self._lock:
+                                self._latest = result
                     except Exception:
-                        result = None
-                    with self._lock:
-                        self._latest = result
+                        pass
                     self._stop.wait(self.refresh)
         except Exception:
             self._stop.set()
