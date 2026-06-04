@@ -101,6 +101,18 @@ class HandTracker:
         self._seen_chat: set[str] = set()
 
     # -- public ------------------------------------------------------------- #
+    @property
+    def in_hand(self) -> bool:
+        return self._hand is not None
+
+    @property
+    def current_street(self) -> str | None:
+        return self._hand.street if self._hand else None
+
+    @property
+    def current_board(self) -> list[str]:
+        return list(self._hand.board) if self._hand else []
+
     def observe(self, state: TableState, t: float = 0.0) -> dict | None:
         """Ingest one frame. Returns a hand record (HandHistory-shaped dict) iff a
         hand just completed, else None.

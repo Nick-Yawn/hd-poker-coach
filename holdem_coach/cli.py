@@ -93,6 +93,56 @@ def render_review(
     return "\n".join(lines)
 
 
+def _run_track(args) -> int:
+    """Live loop: print a post-hand review whenever a hand completes."""
+    from .capture.live import run_tracker
+
+    def on_event(kind, tracker):
+        if kind == "hand-start":
+            print("\n● new hand…", flush=True)
+        elif kind == "street":
+            board = tracker.current_board
+            if board:
+                print(f"   {tracker.current_street}: {' '.join(board)}", flush=True)
+
+    def on_hand(record):
+        try:
+            hh = HandHistory.from_dict(record)
+        except HandHistoryError as e:
+            print(f"\n[{record['hand_id']}] hand ended but couldn't build a full "
+                  f"review ({e}).", file=sys.stderr)
+            print(f"   board={record['board']}  actions={len(record['actions'])}  "
+                  f"result={record['result']}", file=sys.stderr)
+            return
+        try:
+            review = render_review(
+                hh, iterations=args.iterations, seed=args.seed, use_llm=args.llm
+            )
+        except RuntimeError as e:  # e.g. missing API key for --llm
+            print(f"error: {e}", file=sys.stderr)
+            return
+        print("\n" + review, flush=True)
+
+    print(
+        f"Tracking '{args.window}' as {args.hero!r}. Post-hand reviews print here "
+        "when each hand ends. Ctrl+C to stop.",
+        flush=True,
+    )
+    try:
+        n = run_tracker(
+            args.window, hero_name=args.hero, on_hand=on_hand, on_event=on_event,
+            seconds=args.seconds,
+        )
+    except KeyboardInterrupt:
+        n = None
+    except RuntimeError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    if n is not None:
+        print(f"\nStopped. {n} hand(s) reviewed.")
+    return 0
+
+
 def _run_capture(args) -> int:
     """Handle the capture subcommands (windows / snapshot / record)."""
     from .capture import list_windows
@@ -310,6 +360,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_watch.add_argument("--no-show", action="store_true", help="don't open a window")
 
+    p_track = sub.add_parser(
+        "track", help="live: capture -> tracker -> post-hand review per hand"
+    )
+    p_track.add_argument("--window", default="HD Poker", help="window title substring")
+    p_track.add_argument("--hero", required=True, help="your username (for hero seat)")
+    p_track.add_argument("--seconds", type=float, help="stop after N seconds")
+    p_track.add_argument("--iterations", type=int, default=4000, help="equity MC iters")
+    p_track.add_argument("--seed", type=int, default=1234, help="equity RNG seed")
+    p_track.add_argument("--llm", action="store_true", help="real Anthropic coaching")
+
     p_over = sub.add_parser(
         "overlay", help="transparent on-table overlay of detections (click-through)"
     )
@@ -343,6 +403,9 @@ def main(argv: list[str] | None = None) -> int:
         from .app import main as gui_main
 
         return gui_main()
+
+    if args.command == "track":
+        return _run_track(args)
 
     if args.command in (
         "windows", "snapshot", "record", "calibrate", "ocr", "watch", "overlay",
