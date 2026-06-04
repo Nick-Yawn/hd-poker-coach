@@ -16,6 +16,8 @@ dist/
 captures/
 *.png
 !docs/**/*.png
+# Card-only test fixtures are privacy-safe (no usernames/balances) — keep them.
+!tests/fixtures/**/*.png
 
 # OS
 Thumbs.db
