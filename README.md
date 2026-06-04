@@ -96,6 +96,25 @@ tests/                  pytest suite
 
 ## Real LLM coaching (optional)
 
+By default coaching is **mocked** (no key, no network). To use the real
+Anthropic backend:
+
+1. Install the extra: `pip install -e ".[coaching]"`
+2. Provide your key. Easiest: copy the template and edit it —
+   ```powershell
+   Copy-Item .env.example .env
+   # then put your real key in .env:  ANTHROPIC_API_KEY=sk-ant-...
+   ```
+   `.env` is gitignored, so the key is never committed. (A shell variable
+   `$env:ANTHROPIC_API_KEY` also works and takes precedence.)
+3. Turn it on: the **AI coaching** toggle in the GUI, or `--llm` on the CLI:
+   ```powershell
+   python -m holdem_coach analyze sample_hands\hand1_preflop_mistake.json --llm
+   ```
+
+The model only ever *explains* the engine's numbers — it never produces a
+number itself (CLAUDE.md §7). Programmatic use:
+
 ```python
 import anthropic
 from holdem_coach.handhistory import HandHistory

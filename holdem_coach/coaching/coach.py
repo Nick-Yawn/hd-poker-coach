@@ -96,12 +96,33 @@ def _decision_payload(d: DecisionAnalysis) -> dict:
     }
 
 
+def _extract_json(text: str) -> str:
+    """Pull the JSON array out of a model reply, tolerating fences/prose."""
+    s = text.strip()
+    if s.startswith("```"):  # strip a ```json ... ``` fence
+        s = s.split("```", 2)[1]
+        if s.lstrip().lower().startswith("json"):
+            s = s.lstrip()[4:]
+        s = s.strip()
+    start, end = s.find("["), s.rfind("]")
+    if start != -1 and end != -1 and end > start:
+        return s[start : end + 1]
+    return s
+
+
 def _llm_notes(decisions, client) -> list[CoachingNote]:
     payload = [_decision_payload(d) for d in decisions]
     msg = client.messages.create(
         model=MODEL,
         max_tokens=1024,
-        system=_SYSTEM_PROMPT,
+        # System prompt is static across calls — cache it to cut input cost.
+        system=[
+            {
+                "type": "text",
+                "text": _SYSTEM_PROMPT,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ],
         messages=[
             {
                 "role": "user",
@@ -112,7 +133,7 @@ def _llm_notes(decisions, client) -> list[CoachingNote]:
     text = "".join(
         block.text for block in msg.content if getattr(block, "type", None) == "text"
     )
-    data = json.loads(text)
+    data = json.loads(_extract_json(text))
     return [
         CoachingNote(
             concept=item.get("concept", ""),
@@ -131,11 +152,19 @@ def make_anthropic_client():
     """
     import os
 
+    from ..config import load_dotenv
+
+    # Pick up a local .env (gitignored) if the var isn't already exported.
+    load_dotenv()
+
     if not os.environ.get("ANTHROPIC_API_KEY"):
         raise RuntimeError(
-            "ANTHROPIC_API_KEY is not set. Set it in your shell, e.g.\n"
-            '  PowerShell:  $env:ANTHROPIC_API_KEY = "sk-ant-..."\n'
-            "then restart the app."
+            "ANTHROPIC_API_KEY is not set. Either:\n"
+            "  - create a .env file in the project root with:\n"
+            "        ANTHROPIC_API_KEY=sk-ant-...\n"
+            "  - or set it in your shell:\n"
+            '        $env:ANTHROPIC_API_KEY = "sk-ant-..."\n'
+            "then re-run."
         )
     try:
         import anthropic
