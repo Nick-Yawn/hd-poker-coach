@@ -141,12 +141,24 @@ class Overlay:
                 text="recognizer starting…", font=("Consolas", 10),
             )
             return
-        tokens, state, board = result
+        tokens, state, board_located = result
 
         for t in tokens:
             canvas.create_rectangle(
                 t.left * W, t.top * H, t.right * W, t.bottom * H,
                 outline="#55aaff", width=1,
+            )
+
+        # Recognized cards: boxed + labeled in place (this is the "recognition
+        # on the cards" — rank from OCR, suit from colour + pip shape).
+        for card, (fx, fy, fw, fh) in board_located:
+            canvas.create_rectangle(
+                fx * W, fy * H, (fx + fw) * W, (fy + fh) * H,
+                outline="#ffd400", width=3,
+            )
+            canvas.create_text(
+                fx * W + 3, fy * H - 2, text=card, fill="#ffd400", anchor="sw",
+                font=("Consolas", 14, "bold"),
             )
         for s in state.seats:
             colour = "#00ff66" if s.is_hero else "#ffffff"
@@ -159,9 +171,10 @@ class Overlay:
                 s.cx * W, s.cy * H, text=text, fill=colour, anchor="w",
                 font=("Consolas", 10, "bold"),
             )
-        if board:
+        cards = [c for c, _ in board_located]
+        if cards:
             canvas.create_text(
-                W * 0.5, H * 0.05, text="BOARD: " + " ".join(board),
+                W * 0.5, H * 0.05, text="BOARD: " + " ".join(cards),
                 fill="#00ddff", font=("Consolas", 15, "bold"),
             )
         stake = (

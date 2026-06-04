@@ -21,7 +21,7 @@ def _draw_label(cv2, img, text, org, *, fg, bg=(0, 0, 0), scale=0.5, pad=3):
     cv2.putText(img, text, (x, y), cv2.FONT_HERSHEY_SIMPLEX, scale, fg, 1, cv2.LINE_AA)
 
 
-def annotate_recognition(frame, tokens, state, board):
+def annotate_recognition(frame, tokens, state, board_located):
     """Draw detections on a copy of the frame and return it (BGR)."""
     import cv2
 
@@ -34,6 +34,14 @@ def annotate_recognition(frame, tokens, state, board):
         x1, y1 = int(t.right * w), int(t.bottom * h)
         cv2.rectangle(vis, (x0, y0), (x1, y1), (90, 90, 90), 1)
 
+    # Recognized cards, boxed + labeled in place (BGR yellow).
+    for card, (fx, fy, fw, fh) in board_located:
+        x0, y0 = int(fx * w), int(fy * h)
+        x1, y1 = int((fx + fw) * w), int((fy + fh) * h)
+        cv2.rectangle(vis, (x0, y0), (x1, y1), (0, 212, 255), 3)
+        _draw_label(cv2, vis, card, (x0 + 2, y0 - 4), fg=(0, 212, 255),
+                    bg=(20, 20, 20), scale=0.6)
+
     # Per-seat readout.
     for s in state.seats:
         x, y = int(s.cx * w), int(s.cy * h)
@@ -44,8 +52,9 @@ def annotate_recognition(frame, tokens, state, board):
         _draw_label(cv2, vis, f"{tag}{s.name or '?'}{stack}{act}", (x, y),
                     fg=fg, bg=(40, 40, 40))
 
-    # Board cards (top-center).
-    board_txt = "BOARD: " + (" ".join(board) if board else "-")
+    # Board cards (top-center summary).
+    cards = [c for c, _ in board_located]
+    board_txt = "BOARD: " + (" ".join(cards) if cards else "-")
     _draw_label(cv2, vis, board_txt, (int(w * 0.34), int(h * 0.06)),
                 fg=(0, 220, 255), bg=(20, 20, 20), scale=0.7)
 
@@ -63,15 +72,19 @@ def annotate_recognition(frame, tokens, state, board):
 
 
 def recognize(frame, *, hero_name=None):
-    """Run the full per-frame recognition stack on one frame."""
-    from .cards import read_board
+    """Run the full per-frame recognition stack on one frame.
+
+    Returns ``(tokens, state, board_located)`` where board_located is a list of
+    ``(card, frame_box)`` so callers can draw card recognition in place.
+    """
+    from .cards import read_board_located
     from .interpret import interpret
     from .ocr import read_tokens
 
     tokens = read_tokens(frame)
     state = interpret(tokens, hero_name=hero_name)
-    board = read_board(frame)
-    return tokens, state, board
+    board_located = read_board_located(frame)
+    return tokens, state, board_located
 
 
 def run_viewer(

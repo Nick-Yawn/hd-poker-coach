@@ -91,11 +91,14 @@ def _pip_features(np, cv2, img, cx: float, color: str):
     return solidity, extent
 
 
-def read_card_row(row_bgr, *, upscale: int = 4, min_score: float = 0.3) -> list[str]:
-    """Read a horizontal row of cards (board or hole cards), left to right.
+# Approximate card width as a fraction of the card-row, for drawing boxes.
+_CARD_W = 0.16
 
-    Card detection is implicit: OCR returns a rank token only where a face-up
-    card exists, so a flop yields 3, a full board 5, etc.
+
+def locate_card_row(row_bgr, *, upscale: int = 4, min_score: float = 0.3):
+    """Like read_card_row but also returns each card's box in ROW fractions.
+
+    Returns a list of ``(card, (x, y, w, h))`` left to right, boxes in [0, 1].
     """
     import cv2
     import numpy as np
@@ -104,7 +107,7 @@ def read_card_row(row_bgr, *, upscale: int = 4, min_score: float = 0.3) -> list[
 
     up = cv2.resize(row_bgr, None, fx=upscale, fy=upscale, interpolation=cv2.INTER_CUBIC)
     tokens = read_tokens(up, min_score=min_score)
-    cards: list[str] = []
+    out: list[tuple[str, tuple[float, float, float, float]]] = []
     for tok in sorted(tokens, key=lambda t: t.cx):
         rank = _norm_rank(tok.text)
         if rank is None:
@@ -112,15 +115,38 @@ def read_card_row(row_bgr, *, upscale: int = 4, min_score: float = 0.3) -> list[
         color = _glyph_color(np, cv2, up, tok)
         feats = _pip_features(np, cv2, up, tok.cx, color)
         suit = _classify_suit(color, *feats) if feats else "?"
-        cards.append(rank + suit)
-    return cards
+        # Rank glyph sits top-left of the card; bias the box right toward centre.
+        bx = max(0.0, min(1.0 - _CARD_W, tok.cx - _CARD_W * 0.35))
+        out.append((rank + suit, (bx, 0.02, _CARD_W, 0.96)))
+    return out
+
+
+def read_card_row(row_bgr, *, upscale: int = 4, min_score: float = 0.3) -> list[str]:
+    """Read a horizontal row of cards (board or hole cards), left to right.
+
+    Card detection is implicit: OCR returns a rank token only where a face-up
+    card exists, so a flop yields 3, a full board 5, etc.
+    """
+    return [c for c, _ in locate_card_row(row_bgr, upscale=upscale, min_score=min_score)]
+
+
+_BOARD_REGION = (0.37, 0.49, 0.28, 0.12)
 
 
 def read_board(frame, board_region=None) -> list[str]:
     """Read the community cards from a full table frame."""
-    import cv2  # noqa: F401  (ensures the [capture] extra is present)
+    return [c for c, _ in read_board_located(frame, board_region)]
 
-    from .layout import DEFAULT_6MAX, crop
 
-    region = board_region if board_region is not None else (0.37, 0.49, 0.28, 0.12)
-    return read_card_row(crop(frame, region))
+def read_board_located(frame, board_region=None):
+    """Community cards with each card's box in FRAME fractions.
+
+    Returns ``[(card, (x, y, w, h)), ...]`` for drawing recognition in place.
+    """
+    from .layout import crop
+
+    rx, ry, rw, rh = board_region if board_region is not None else _BOARD_REGION
+    out = []
+    for card, (bx, by, bw, bh) in locate_card_row(crop(frame, (rx, ry, rw, rh))):
+        out.append((card, (rx + bx * rw, ry + by * rh, bw * rw, bh * rh)))
+    return out
