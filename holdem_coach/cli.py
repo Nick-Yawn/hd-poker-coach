@@ -190,6 +190,28 @@ def _run_capture(args) -> int:
             print(f"overlay -> {args.out}")
             return 0
 
+        if args.command == "overlay":
+            from .capture.overlay import run_overlay
+
+            print(
+                "Overlay: detections only (no advice). "
+                "Close with Ctrl+C here, or --seconds."
+            )
+            n = run_overlay(args.window, hero_name=args.hero, seconds=args.seconds)
+            print(f"overlay ran {n} tick(s)")
+            return 0
+
+        if args.command == "watch":
+            from .capture.viewer import run_viewer
+
+            n = run_viewer(
+                args.window, hero_name=args.hero, scale=args.scale,
+                frames=args.frames, show=not args.no_show,
+                save_path=str(args.save) if args.save else None,
+            )
+            print(f"watched {n} frame(s)")
+            return 0
+
         if args.command == "record":
             from .capture.grabber import WindowGrabber
             from .capture.recorder import record
@@ -276,6 +298,25 @@ def main(argv: list[str] | None = None) -> int:
         help="annotated output PNG (default captures/_ocr.png)",
     )
 
+    p_watch = sub.add_parser(
+        "watch", help="live recognizer view in a separate window (debug)"
+    )
+    p_watch.add_argument("--window", default="HD Poker", help="window title substring")
+    p_watch.add_argument("--hero", help="hero username (for seat detection)")
+    p_watch.add_argument("--scale", type=float, default=0.6, help="display scale")
+    p_watch.add_argument("--frames", type=int, help="stop after N frames (default: until Q)")
+    p_watch.add_argument(
+        "--save", type=Path, help="write the last annotated frame here (headless check)"
+    )
+    p_watch.add_argument("--no-show", action="store_true", help="don't open a window")
+
+    p_over = sub.add_parser(
+        "overlay", help="transparent on-table overlay of detections (click-through)"
+    )
+    p_over.add_argument("--window", default="HD Poker", help="window title substring")
+    p_over.add_argument("--hero", help="hero username (for seat detection)")
+    p_over.add_argument("--seconds", type=float, help="auto-close after N seconds")
+
     p_rec = sub.add_parser("record", help="save frames at an interval for dev data")
     p_rec.add_argument("--window", required=True, help="title substring to capture")
     p_rec.add_argument("--out", type=Path, default=Path("captures"), help="output dir")
@@ -303,7 +344,9 @@ def main(argv: list[str] | None = None) -> int:
 
         return gui_main()
 
-    if args.command in ("windows", "snapshot", "record", "calibrate", "ocr"):
+    if args.command in (
+        "windows", "snapshot", "record", "calibrate", "ocr", "watch", "overlay",
+    ):
         return _run_capture(args)
 
     if args.command == "analyze":
