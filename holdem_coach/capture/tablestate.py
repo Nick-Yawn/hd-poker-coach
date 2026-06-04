@@ -26,6 +26,7 @@ class SeatState:
     cy: float = 0.0
     is_hero: bool = False
     has_cards: bool = False    # filled by the card reader later
+    hole_cards: list[str] | None = None  # hero's cards, when readable
 
     def to_dict(self) -> dict:
         return dict(self.__dict__)
