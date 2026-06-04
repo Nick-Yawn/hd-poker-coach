@@ -60,20 +60,32 @@ class Overlay:
         except Exception:
             self._stop.set()
 
-    # -- click-through, tool-window extended styles ------------------------- #
+    # -- click-through, tool-window, exclude-from-capture ------------------- #
     @staticmethod
-    def _make_clickthrough(root) -> None:
+    def _configure_window(root) -> bool:
+        """Click-through + tool-window, and EXCLUDE the overlay from screen
+        capture so our own mss grab never sees (and re-OCRs) what we drew.
+
+        Returns whether exclude-from-capture was applied (Win10 2004+).
+        """
         import ctypes
 
         GWL_EXSTYLE = -20
         WS_EX_TRANSPARENT = 0x20
         WS_EX_TOOLWINDOW = 0x80  # keep it out of the taskbar/alt-tab
+        WDA_EXCLUDEFROMCAPTURE = 0x11  # invisible to capture, visible on screen
         user32 = ctypes.windll.user32
         hwnd = user32.GetParent(root.winfo_id()) or root.winfo_id()
         style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
         user32.SetWindowLongW(
             hwnd, GWL_EXSTYLE, style | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW
         )
+        try:
+            user32.SetWindowDisplayAffinity.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+            ok = bool(user32.SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE))
+        except Exception:
+            ok = False
+        return ok
 
     def run(self, *, seconds: float | None = None) -> int:
         import tkinter as tk
@@ -92,7 +104,13 @@ class Overlay:
         canvas = tk.Canvas(root, bg=_TRANSPARENT, highlightthickness=0, bd=0)
         canvas.pack(fill="both", expand=True)
         root.update_idletasks()
-        self._make_clickthrough(root)
+        excluded = self._configure_window(root)
+        if not excluded:
+            # Old Windows: overlay would be captured & re-OCR'd. Warn the user.
+            print(
+                "warning: SetWindowDisplayAffinity unavailable — the overlay may be "
+                "captured by the recognizer (needs Windows 10 2004+).",
+            )
 
         worker = threading.Thread(target=self._worker, daemon=True)
         worker.start()
