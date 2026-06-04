@@ -52,6 +52,18 @@ def annotate_recognition(frame, tokens, state, board_located):
         _draw_label(cv2, vis, f"{tag}{s.name or '?'}{stack}{act}", (x, y),
                     fg=fg, bg=(40, 40, 40))
 
+    # Hero hole cards, boxed + labeled (green) at the fixed offset above seat.
+    hero = state.hero
+    if hero is not None and hero.hole_cards:
+        from .cards import hero_card_region
+
+        fx, fy, fw, fh = hero_card_region(hero.cx, hero.cy)
+        x0, y0 = int(fx * w), int(fy * h)
+        x1, y1 = int((fx + fw) * w), int((fy + fh) * h)
+        cv2.rectangle(vis, (x0, y0), (x1, y1), (0, 255, 0), 3)
+        _draw_label(cv2, vis, "YOU: " + " ".join(hero.hole_cards), (x0 + 2, y0 - 4),
+                    fg=(0, 255, 0), bg=(20, 20, 20), scale=0.6)
+
     # Board cards (top-center summary).
     cards = [c for c, _ in board_located]
     board_txt = "BOARD: " + (" ".join(cards) if cards else "-")
@@ -77,13 +89,17 @@ def recognize(frame, *, hero_name=None):
     Returns ``(tokens, state, board_located)`` where board_located is a list of
     ``(card, frame_box)`` so callers can draw card recognition in place.
     """
-    from .cards import read_board_located
+    from .cards import read_board_located, read_hero_hole_cards
     from .interpret import interpret
     from .ocr import read_tokens
 
     tokens = read_tokens(frame)
     state = interpret(tokens, hero_name=hero_name)
     board_located = read_board_located(frame)
+    if state.hero is not None:
+        cards = read_hero_hole_cards(frame, state.hero.cx, state.hero.cy)
+        if len(cards) == 2:
+            state.hero.hole_cards = cards
     return tokens, state, board_located
 
 

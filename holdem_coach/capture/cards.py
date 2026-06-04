@@ -154,6 +154,30 @@ def read_board(frame, board_region=None) -> list[str]:
     return [c for c, _ in read_board_located(frame, board_region)]
 
 
+# The hero's hole-cards-above-nametag is a fixed-shape widget that renders the
+# same regardless of seat (verified by moving seats: cards stay directly above
+# the nameplate, same offset, at both a bottom and a top seat). So the cards sit
+# at a CONSTANT offset from the detected nameplate — not a "toward centre" one.
+_HERO_OFFSET_XY = (0.0, -0.09)   # cards are ~0.09 above the nameplate centre
+_HERO_CARD_BOX = (0.14, 0.105)   # (w, h) of the two-card search region
+
+
+def hero_card_region(hero_cx: float, hero_cy: float):
+    """The hole-card search box (frame fractions) for a hero at (cx, cy)."""
+    dx, dy = _HERO_OFFSET_XY
+    ccx, ccy = hero_cx + dx, hero_cy + dy
+    w, h = _HERO_CARD_BOX
+    return (ccx - w / 2, ccy - h / 2, w, h)
+
+
+def read_hero_hole_cards(frame, hero_cx: float, hero_cy: float) -> list[str]:
+    """Read the hero's two hole cards given the detected hero seat position."""
+    from .layout import crop
+
+    region = hero_card_region(hero_cx, hero_cy)
+    return read_card_row(crop(frame, region))[:2]
+
+
 def read_board_located(frame, board_region=None):
     """Community cards with each card's box in FRAME fractions.
 

@@ -177,6 +177,21 @@ class Overlay:
                 W * 0.5, H * 0.05, text="BOARD: " + " ".join(cards),
                 fill="#00ddff", font=("Consolas", 15, "bold"),
             )
+
+        # Hero hole cards, boxed + labeled at the fixed offset above the nameplate.
+        hero = state.hero
+        if hero is not None and hero.hole_cards:
+            from .cards import hero_card_region
+
+            fx, fy, fw, fh = hero_card_region(hero.cx, hero.cy)
+            canvas.create_rectangle(
+                fx * W, fy * H, (fx + fw) * W, (fy + fh) * H,
+                outline="#00ff66", width=3,
+            )
+            canvas.create_text(
+                fx * W, fy * H - 2, text="YOU: " + " ".join(hero.hole_cards),
+                fill="#00ff66", anchor="sw", font=("Consolas", 13, "bold"),
+            )
         stake = (
             f"{state.small_blind:g}/{state.big_blind:g}" if state.big_blind else "?"
         )
