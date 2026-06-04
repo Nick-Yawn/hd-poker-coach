@@ -151,6 +151,45 @@ def _run_capture(args) -> int:
             print(f"saved {args.out}")
             return 0
 
+        if args.command == "ocr":
+            import cv2
+
+            from .capture.interpret import interpret
+            from .capture.ocr import read_tokens
+            from .capture.recorder import save_frame
+
+            if args.in_path:
+                frame = cv2.imread(str(args.in_path))
+                if frame is None:
+                    print(f"error: could not read {args.in_path}", file=sys.stderr)
+                    return 2
+            elif args.window:
+                from .capture.grabber import WindowGrabber
+
+                with WindowGrabber(args.window) as g:
+                    frame = g.grab()
+            else:
+                print("error: pass --in <png> or --window <title>", file=sys.stderr)
+                return 2
+
+            tokens = read_tokens(frame)
+            state = interpret(tokens, hero_name=args.hero)
+            print(f"stakes: {state.small_blind}/{state.big_blind}  pot: {state.pot}")
+            print(f"seats ({len(state.seats)}):")
+            for s in sorted(state.seats, key=lambda s: (s.cy, s.cx)):
+                tag = "  <- HERO" if s.is_hero else ""
+                print(f"  {str(s.name):<14} stack={s.stack} action={s.action}{tag}")
+
+            h, w = frame.shape[:2]
+            vis = frame.copy()
+            for t in tokens:
+                x0, y0 = int(t.left * w), int(t.top * h)
+                x1, y1 = int(t.right * w), int(t.bottom * h)
+                cv2.rectangle(vis, (x0, y0), (x1, y1), (0, 255, 0), 1)
+            save_frame(vis, args.out)
+            print(f"overlay -> {args.out}")
+            return 0
+
         if args.command == "record":
             from .capture.grabber import WindowGrabber
             from .capture.recorder import record
@@ -228,6 +267,15 @@ def main(argv: list[str] | None = None) -> int:
         help="annotated output PNG (default captures/_calibrated.png)",
     )
 
+    p_ocr = sub.add_parser("ocr", help="run OCR on a frame and dump tokens + overlay")
+    p_ocr.add_argument("--in", dest="in_path", type=Path, help="input PNG frame")
+    p_ocr.add_argument("--window", help="or grab live from this window")
+    p_ocr.add_argument("--hero", help="hero username (for seat detection)")
+    p_ocr.add_argument(
+        "--out", type=Path, default=Path("captures/_ocr.png"),
+        help="annotated output PNG (default captures/_ocr.png)",
+    )
+
     p_rec = sub.add_parser("record", help="save frames at an interval for dev data")
     p_rec.add_argument("--window", required=True, help="title substring to capture")
     p_rec.add_argument("--out", type=Path, default=Path("captures"), help="output dir")
@@ -255,7 +303,7 @@ def main(argv: list[str] | None = None) -> int:
 
         return gui_main()
 
-    if args.command in ("windows", "snapshot", "record", "calibrate"):
+    if args.command in ("windows", "snapshot", "record", "calibrate", "ocr"):
         return _run_capture(args)
 
     if args.command == "analyze":
