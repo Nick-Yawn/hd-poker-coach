@@ -117,8 +117,9 @@ def locate_card_row(row_bgr, *, upscale: int = 4, min_score: float = 0.3):
         suit = _classify_suit(color, *feats) if feats else "?"
         # Rank glyph sits top-left of the card; bias the box right toward centre.
         bx = max(0.0, min(1.0 - _CARD_W, tok.cx - _CARD_W * 0.35))
-        # Box trimmed to sit on the card face, not the felt below it.
-        out.append((rank + suit, (bx, 0.06, _CARD_W, 0.80)))
+        # Box covers the card face; extends a touch past the OCR region bottom so
+        # it reaches the card's lower pip (cards sit lower on some table themes).
+        out.append((rank + suit, (bx, 0.10, _CARD_W, 1.05)))
     return out
 
 
