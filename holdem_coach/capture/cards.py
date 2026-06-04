@@ -59,10 +59,18 @@ def _glyph_color(np, cv2, img, tok) -> str:
     return "red" if red > 0.04 else "black"
 
 
-def _pip_features(np, cv2, img, cx: float, color: str):
-    """Largest ink blob in the card column at `cx`; return (solidity, extent)."""
+def _pip_features(np, cv2, img, tok, color: str):
+    """Largest ink blob for THIS card; return (solidity, extent).
+
+    The rank glyph sits in the card's top-left corner and the suit pip is to its
+    RIGHT (the big centre pip is lower-right of the rank). So we search a band
+    starting at the rank's left edge and extending rightward only — never
+    leftward into the previous card, which would mix one card's rank with the
+    neighbour's suit.
+    """
     H, W = img.shape[:2]
-    x0, x1 = int((cx - 0.085) * W), int((cx + 0.085) * W)
+    x0 = int(tok.left * W)
+    x1 = int(min(1.0, tok.cx + 0.12) * W)
     strip = img[:, max(0, x0):min(W, x1)]
     if strip.size == 0:
         return None
@@ -108,12 +116,18 @@ def locate_card_row(row_bgr, *, upscale: int = 4, min_score: float = 0.3):
     up = cv2.resize(row_bgr, None, fx=upscale, fy=upscale, interpolation=cv2.INTER_CUBIC)
     tokens = read_tokens(up, min_score=min_score)
     out: list[tuple[str, tuple[float, float, float, float]]] = []
+    last_cx = None
     for tok in sorted(tokens, key=lambda t: t.cx):
         rank = _norm_rank(tok.text)
         if rank is None:
             continue
+        # Dedupe: OCR sometimes double-detects one rank; drop a token that sits
+        # almost on top of the previous accepted card.
+        if last_cx is not None and abs(tok.cx - last_cx) < _CARD_W * 0.5:
+            continue
+        last_cx = tok.cx
         color = _glyph_color(np, cv2, up, tok)
-        feats = _pip_features(np, cv2, up, tok.cx, color)
+        feats = _pip_features(np, cv2, up, tok, color)
         suit = _classify_suit(color, *feats) if feats else "?"
         # Rank glyph sits top-left of the card; bias the box right toward centre.
         bx = max(0.0, min(1.0 - _CARD_W, tok.cx - _CARD_W * 0.35))
