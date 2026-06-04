@@ -76,6 +76,29 @@ pytest
 
 The math layer is unit-tested against known values (e.g. AA vs KK ≈ 81%).
 
+## OCR speed (GPU optional)
+
+OCR (RapidOCR/ONNX) is the capture bottleneck (~0.8 s/frame on CPU). Two levers:
+
+- **Frame-skip** (automatic): the live loop skips OCR on frames that haven't
+  changed vs the last processed one (`ChangeGate`), so static stretches cost
+  almost nothing. Can't miss a real change — new cards/bets/labels are new pixels.
+- **GPU** (optional): the engine auto-detects a GPU execution provider. Install
+  one (it replaces the CPU `onnxruntime` that RapidOCR pulls in):
+
+  ```powershell
+  # DirectML — any DX12 GPU (NVIDIA/AMD/Intel), no CUDA install:
+  .\.venv\Scripts\python.exe -m pip uninstall onnxruntime -y
+  .\.venv\Scripts\python.exe -m pip install onnxruntime-directml
+
+  # or CUDA (NVIDIA, needs CUDA 12 + cuDNN 9):
+  # ... pip install onnxruntime-gpu
+  ```
+
+  Measured on an RTX 4070 SUPER via DirectML: full-frame OCR 802→301 ms, full
+  recognize 1634→664 ms (~2.5×). No code change — `ocr.py` enables the provider
+  when it's available, and falls back to CPU if you reinstall plain onnxruntime.
+
 ## Default table format
 
 6-max cash, 100bb (blinds 1/2, 200 starting stack) — matches the schema example

@@ -15,6 +15,12 @@ dependencies = [
 [project.optional-dependencies]
 coaching = ["anthropic>=0.40"]
 capture = ["mss>=9", "opencv-python>=4.9", "numpy>=1.26", "rapidocr-onnxruntime>=1.4"]
+# GPU OCR (optional, big speedup). These REPLACE the CPU onnxruntime that
+# rapidocr-onnxruntime pulls in — install one, then uninstall plain onnxruntime:
+#   pip uninstall onnxruntime -y && pip install -e ".[gpu-directml]"
+# The OCR engine auto-detects and uses the GPU provider when present (ocr.py).
+gpu-directml = ["onnxruntime-directml>=1.17"]   # any DX12 GPU, no CUDA needed
+gpu-cuda = ["onnxruntime-gpu>=1.17"]            # NVIDIA, needs CUDA 12 + cuDNN 9
 dev = ["pytest>=8"]
 build = ["pyinstaller>=6"]
 

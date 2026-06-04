@@ -44,17 +44,39 @@ class Token:
 _ENGINE = None
 
 
+def gpu_available() -> bool:
+    """True if a GPU execution provider (DirectML/CUDA) is available to ORT."""
+    try:
+        import onnxruntime as ort
+    except ImportError:  # pragma: no cover
+        return False
+    providers = set(ort.get_available_providers())
+    return bool(providers & {"DmlExecutionProvider", "CUDAExecutionProvider"})
+
+
 def _get_engine():
     global _ENGINE
     if _ENGINE is None:
         try:
+            import onnxruntime as ort
+
             from rapidocr_onnxruntime import RapidOCR
         except ImportError as exc:  # pragma: no cover - optional extra
             raise RuntimeError(
                 'OCR needs the [capture] extra + RapidOCR:\n'
                 '  pip install -e ".[capture]" rapidocr-onnxruntime'
             ) from exc
-        _ENGINE = RapidOCR()
+
+        # Auto-enable a GPU execution provider when one is installed, else CPU.
+        # Installing onnxruntime-directml (instead of onnxruntime) lights up
+        # DirectML on any DX12 GPU; installing onnxruntime-gpu lights up CUDA.
+        providers = set(ort.get_available_providers())
+        kwargs = {}
+        if "DmlExecutionProvider" in providers:
+            kwargs = dict(det_use_dml=True, cls_use_dml=True, rec_use_dml=True)
+        elif "CUDAExecutionProvider" in providers:
+            kwargs = dict(det_use_cuda=True, cls_use_cuda=True, rec_use_cuda=True)
+        _ENGINE = RapidOCR(**kwargs)
     return _ENGINE
 
 
