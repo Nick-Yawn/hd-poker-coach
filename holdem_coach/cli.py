@@ -93,6 +93,64 @@ def render_review(
     return "\n".join(lines)
 
 
+def _run_capture(args) -> int:
+    """Handle the capture subcommands (windows / snapshot / record)."""
+    from .capture import list_windows
+
+    if args.command == "windows":
+        wins = list_windows()
+        if args.filter:
+            needle = args.filter.lower()
+            wins = [w for w in wins if needle in w.title.lower()]
+        if not wins:
+            print("no matching windows.", file=sys.stderr)
+            return 1
+        print(f"{'SIZE':>11}   TITLE")
+        for w in wins:
+            print(f"{w.width:>4}x{w.height:<4}   {w.title}")
+        return 0
+
+    try:
+        if args.command == "snapshot":
+            from .capture.grabber import MonitorGrabber, WindowGrabber
+            from .capture.recorder import save_frame
+
+            if args.monitor is not None:
+                grabber = MonitorGrabber(args.monitor)
+            elif args.window:
+                grabber = WindowGrabber(args.window, client=not args.full_window)
+            else:
+                print("error: pass --window <title> or --monitor <n>", file=sys.stderr)
+                return 2
+            with grabber:
+                path = save_frame(grabber.grab(), args.out)
+            print(f"saved {path}")
+            return 0
+
+        if args.command == "record":
+            from .capture.grabber import WindowGrabber
+            from .capture.recorder import record
+
+            grabber = WindowGrabber(args.window, client=not args.full_window)
+            target = args.count if args.count else "∞ (Ctrl+C to stop)"
+            print(
+                f"recording {target} frames every {args.interval:g}s "
+                f"from window ~{args.window!r} → {args.out}/"
+            )
+            with grabber:
+                n = record(
+                    grabber, args.out, interval=args.interval, count=args.count,
+                    on_save=lambda i, p: print(f"  [{i + 1}] {p.name}"),
+                )
+            print(f"done — {n} frame(s) written to {args.out}/")
+            return 0
+    except RuntimeError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="holdem-coach",
@@ -118,6 +176,34 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("gui", help="launch the desktop review panel")
 
+    # --- capture (Milestone 2 vision) ------------------------------------- #
+    p_win = sub.add_parser("windows", help="list visible windows (find HD Poker)")
+    p_win.add_argument(
+        "--filter", default="", help="only show windows whose title contains this"
+    )
+
+    p_snap = sub.add_parser("snapshot", help="save one frame from a window/monitor")
+    p_snap.add_argument("--window", help="capture the window whose title contains this")
+    p_snap.add_argument("--monitor", type=int, help="capture this monitor (0=all)")
+    p_snap.add_argument(
+        "--out", type=Path, default=Path("captures/snapshot.png"),
+        help="output PNG path (default captures/snapshot.png)",
+    )
+    p_snap.add_argument(
+        "--full-window", action="store_true",
+        help="capture the whole window incl. title bar (default: client area only)",
+    )
+
+    p_rec = sub.add_parser("record", help="save frames at an interval for dev data")
+    p_rec.add_argument("--window", required=True, help="title substring to capture")
+    p_rec.add_argument("--out", type=Path, default=Path("captures"), help="output dir")
+    p_rec.add_argument("--interval", type=float, default=1.0, help="seconds between frames")
+    p_rec.add_argument("--count", type=int, help="number of frames (default: until Ctrl+C)")
+    p_rec.add_argument(
+        "--full-window", action="store_true",
+        help="capture the whole window incl. title bar (default: client area only)",
+    )
+
     args = parser.parse_args(argv)
 
     # The review uses box-drawing/check glyphs; the default Windows console code
@@ -134,6 +220,9 @@ def main(argv: list[str] | None = None) -> int:
         from .app import main as gui_main
 
         return gui_main()
+
+    if args.command in ("windows", "snapshot", "record"):
+        return _run_capture(args)
 
     if args.command == "analyze":
         try:

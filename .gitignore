@@ -11,6 +11,12 @@ dist/
 # Env / secrets
 .env
 
+# Captured frames — contain account balance + other players' usernames.
+# Never commit these (privacy). Templates we derive from them live elsewhere.
+captures/
+*.png
+!docs/**/*.png
+
 # OS
 Thumbs.db
 .DS_Store
