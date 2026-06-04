@@ -80,8 +80,13 @@ def action_of(text: str) -> str | None:
 
 
 def is_chat(token: Token) -> bool:
-    """Chat-log lines carry a timestamp and sit in the bottom-left feed."""
-    return bool(_CHAT_RE.search(token.text)) or token.cy > 0.88
+    """Chat-log lines carry a timestamp, or sit in the bottom-LEFT feed.
+
+    The bottom-RIGHT holds the hero's action buttons (FOLD/CHECK/RAISE TO/bet
+    sizes); restricting the non-timestamped fallback to the left half keeps those
+    out of the chat stream.
+    """
+    return bool(_CHAT_RE.search(token.text)) or (token.cy > 0.88 and token.cx < 0.5)
 
 
 def _normalize_name(s: str) -> str:
