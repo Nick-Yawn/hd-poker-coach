@@ -127,6 +127,30 @@ def _run_capture(args) -> int:
             print(f"saved {path}")
             return 0
 
+        if args.command == "calibrate":
+            import cv2
+
+            from .capture.layout import DEFAULT_6MAX, annotate
+
+            if args.in_path:
+                frame = cv2.imread(str(args.in_path))
+                if frame is None:
+                    print(f"error: could not read {args.in_path}", file=sys.stderr)
+                    return 2
+            elif args.window:
+                from .capture.grabber import WindowGrabber
+
+                with WindowGrabber(args.window) as g:
+                    frame = g.grab()
+            else:
+                print("error: pass --in <png> or --window <title>", file=sys.stderr)
+                return 2
+            from .capture.recorder import save_frame
+
+            save_frame(annotate(frame, DEFAULT_6MAX), args.out)
+            print(f"saved {args.out}")
+            return 0
+
         if args.command == "record":
             from .capture.grabber import WindowGrabber
             from .capture.recorder import record
@@ -194,6 +218,16 @@ def main(argv: list[str] | None = None) -> int:
         help="capture the whole window incl. title bar (default: client area only)",
     )
 
+    p_cal = sub.add_parser(
+        "calibrate", help="overlay the table layout regions on a frame"
+    )
+    p_cal.add_argument("--in", dest="in_path", type=Path, help="input PNG frame")
+    p_cal.add_argument("--window", help="or grab live from this window")
+    p_cal.add_argument(
+        "--out", type=Path, default=Path("captures/_calibrated.png"),
+        help="annotated output PNG (default captures/_calibrated.png)",
+    )
+
     p_rec = sub.add_parser("record", help="save frames at an interval for dev data")
     p_rec.add_argument("--window", required=True, help="title substring to capture")
     p_rec.add_argument("--out", type=Path, default=Path("captures"), help="output dir")
@@ -221,7 +255,7 @@ def main(argv: list[str] | None = None) -> int:
 
         return gui_main()
 
-    if args.command in ("windows", "snapshot", "record"):
+    if args.command in ("windows", "snapshot", "record", "calibrate"):
         return _run_capture(args)
 
     if args.command == "analyze":
