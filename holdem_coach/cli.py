@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 from .analysis.scorer import score_hand
-from .coaching.coach import coach_decisions
+from .coaching.coach import coach_decisions, make_anthropic_client
 from .handhistory import HandHistory, HandHistoryError
 
 _BAR = "─" * 60
@@ -24,9 +24,12 @@ def _fmt_board(cards: list[str]) -> str:
     return " ".join(cards) if cards else "(preflop)"
 
 
-def render_review(hh: HandHistory, *, iterations: int, seed: int | None) -> str:
+def render_review(
+    hh: HandHistory, *, iterations: int, seed: int | None, use_llm: bool = False
+) -> str:
     decisions = score_hand(hh, iterations=iterations, seed=seed)
-    notes = coach_decisions(decisions)  # mocked by default
+    client = make_anthropic_client() if use_llm else None
+    notes = coach_decisions(decisions, client=client)  # mocked unless --llm
 
     lines: list[str] = []
     lines.append(_BAR)
@@ -107,6 +110,13 @@ def main(argv: list[str] | None = None) -> int:
         "--seed", type=int, default=1234,
         help="RNG seed for reproducible equity (default 1234)",
     )
+    p_an.add_argument(
+        "--llm", action="store_true",
+        help="use real Anthropic coaching instead of the mock "
+        "(requires ANTHROPIC_API_KEY and the [coaching] extra)",
+    )
+
+    sub.add_parser("gui", help="launch the desktop review panel")
 
     args = parser.parse_args(argv)
 
@@ -120,6 +130,11 @@ def main(argv: list[str] | None = None) -> int:
             except (ValueError, OSError):
                 pass
 
+    if args.command == "gui":
+        from .app import main as gui_main
+
+        return gui_main()
+
     if args.command == "analyze":
         try:
             hh = HandHistory.load(args.path)
@@ -129,7 +144,14 @@ def main(argv: list[str] | None = None) -> int:
         except HandHistoryError as e:
             print(f"error: invalid hand history: {e}", file=sys.stderr)
             return 2
-        print(render_review(hh, iterations=args.iterations, seed=args.seed))
+        try:
+            review = render_review(
+                hh, iterations=args.iterations, seed=args.seed, use_llm=args.llm
+            )
+        except RuntimeError as e:  # e.g. missing API key / SDK for --llm
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        print(review)
         return 0
 
     parser.print_help()

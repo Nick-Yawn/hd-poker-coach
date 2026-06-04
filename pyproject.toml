@@ -16,9 +16,14 @@ dependencies = [
 coaching = ["anthropic>=0.40"]
 capture = ["mss>=9", "opencv-python>=4.9", "pytesseract>=0.3"]
 dev = ["pytest>=8"]
+build = ["pyinstaller>=6"]
 
 [project.scripts]
 holdem-coach = "holdem_coach.cli:main"
+
+[project.gui-scripts]
+# No console window on Windows when launched via this entry point.
+holdem-coach-gui = "holdem_coach.app:main"
 
 [tool.setuptools.packages.find]
 include = ["holdem_coach*"]

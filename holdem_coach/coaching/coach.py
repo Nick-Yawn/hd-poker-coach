@@ -123,6 +123,30 @@ def _llm_notes(decisions, client) -> list[CoachingNote]:
     ]
 
 
+def make_anthropic_client():
+    """Construct an Anthropic client, or raise a clear error explaining how to fix.
+
+    Reads the API key from the ``ANTHROPIC_API_KEY`` environment variable — the
+    secret is never read from disk or passed through our own code.
+    """
+    import os
+
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY is not set. Set it in your shell, e.g.\n"
+            '  PowerShell:  $env:ANTHROPIC_API_KEY = "sk-ant-..."\n'
+            "then restart the app."
+        )
+    try:
+        import anthropic
+    except ImportError as exc:  # pragma: no cover - depends on optional extra
+        raise RuntimeError(
+            'The Anthropic SDK is not installed. Install it with:\n'
+            '  pip install -e ".[coaching]"'
+        ) from exc
+    return anthropic.Anthropic()
+
+
 def coach_decisions(
     decisions: list[DecisionAnalysis], *, client=None
 ) -> list[CoachingNote]:

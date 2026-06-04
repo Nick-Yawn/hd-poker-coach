@@ -33,7 +33,31 @@ pip install -e ".[dev]"                # runtime + pytest
 (Optional extras: `.[coaching]` for the Anthropic SDK, `.[capture]` for the
 future vision deps.)
 
-## Run
+## Run as an app (desktop panel)
+
+A Tkinter review panel — open a hand (or pick a bundled sample) and read the
+colour-coded review. Tkinter ships with Python, so there are no extra deps.
+
+```powershell
+python -m holdem_coach gui
+```
+
+Toggle **AI coaching** in the toolbar to use the real Anthropic backend instead
+of the mock (needs `ANTHROPIC_API_KEY` set and the `[coaching]` extra installed;
+see below). The window stays responsive during Monte Carlo / API calls — work
+runs on a background thread.
+
+### Standalone .exe (no Python needed)
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[build]"     # one time
+powershell -ExecutionPolicy Bypass -File packaging\build_exe.ps1
+```
+
+Produces `dist\HoldemCoach\HoldemCoach.exe` — double-click to run, and the whole
+`dist\HoldemCoach\` folder is shareable.
+
+## Run from the command line
 
 ```powershell
 python -m holdem_coach analyze sample_hands/hand1_preflop_mistake.json
@@ -42,7 +66,7 @@ python -m holdem_coach analyze sample_hands/hand3_clean_line.json
 ```
 
 Equity is Monte Carlo; `--seed` makes it reproducible and `--iterations`
-trades speed for precision.
+trades speed for precision. Add `--llm` for real Anthropic coaching.
 
 ## Test
 
