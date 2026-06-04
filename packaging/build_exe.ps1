@@ -22,5 +22,15 @@ if (-not (Test-Path $py)) { throw "venv not found at $py - create it first (see 
     --add-data "sample_hands;sample_hands" `
     "packaging\holdem_coach_gui.py"
 
+# Ship the .env template next to the exe so users know where to put their key.
+# The packaged app reads a `.env` placed in this folder at runtime (see
+# holdem_coach/config.py frozen branch). We deliberately DO NOT bundle a real
+# key into the binary or the dist folder during the build.
+$dest = "dist\HoldemCoach"
+if (Test-Path ".env.example") {
+    Copy-Item ".env.example" (Join-Path $dest ".env.example") -Force
+}
+
 Write-Host ""
-Write-Host "Built: dist\HoldemCoach\HoldemCoach.exe" -ForegroundColor Green
+Write-Host "Built: $dest\HoldemCoach.exe" -ForegroundColor Green
+Write-Host "To enable AI coaching for the packaged app, put your key in $dest\.env" -ForegroundColor Yellow
