@@ -19,13 +19,15 @@ from __future__ import annotations
 
 RANKS = "23456789TJQKA"
 
-# Reference (solidity, extent) centroids per suit, from real cards.
-_SUIT_REF = {
-    "c": (0.76, 0.51),
-    "s": (0.92, 0.61),
-    "d": (0.90, 0.46),
-    "h": (0.95, 0.64),
-}
+# Suit shape is split by the feature that actually separates each colour pair,
+# calibrated on real cards across two table themes (after isolating the card
+# face so the background can't corrupt the blob):
+#   black: a club's three lobes drop SOLIDITY (0.74-0.81) well below a spade's
+#          (0.91-0.93)            -> split at 0.86
+#   red:   a diamond (rhombus) fills ~half its box in EXTENT (0.46-0.48); a
+#          heart fills much more (0.64-0.66)  -> split at 0.56
+_CLUB_SPADE_SOLIDITY = 0.86
+_DIAMOND_HEART_EXTENT = 0.56
 
 
 def _norm_rank(text: str) -> str | None:
@@ -40,12 +42,9 @@ def _norm_rank(text: str) -> str | None:
 
 
 def _classify_suit(color: str, solidity: float, extent: float) -> str:
-    candidates = ("c", "s") if color == "black" else ("d", "h")
-    feat = (solidity, extent)
-    return min(
-        candidates,
-        key=lambda k: (feat[0] - _SUIT_REF[k][0]) ** 2 + (feat[1] - _SUIT_REF[k][1]) ** 2,
-    )
+    if color == "black":
+        return "c" if solidity < _CLUB_SPADE_SOLIDITY else "s"
+    return "d" if extent < _DIAMOND_HEART_EXTENT else "h"
 
 
 def _glyph_color(np, cv2, img, tok) -> str:
@@ -75,17 +74,31 @@ def _pip_features(np, cv2, img, tok, color: str):
     if strip.size == 0:
         return None
     hsv = cv2.cvtColor(strip, cv2.COLOR_BGR2HSV)
+    sh, sw = strip.shape[:2]
+
+    # Isolate the WHITE CARD FACE first, so a dark background (e.g. the table
+    # rail behind the cards on some themes) can't masquerade as the suit blob.
+    face = ((hsv[..., 2] > 140) & (hsv[..., 1] < 70)).astype(np.uint8) * 255
+    face = cv2.morphologyEx(face, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+    fcnts, _ = cv2.findContours(face, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not fcnts:
+        return None
+    fx, fy, fw, fh = cv2.boundingRect(max(fcnts, key=cv2.contourArea))
+    if fw * fh < 0.10 * sw * sh:  # no real card face here
+        return None
+    sub = hsv[fy:fy + fh, fx:fx + fw]
+    Hh, Ss, Vv = sub[..., 0], sub[..., 1], sub[..., 2]
+
     if color == "red":
-        mask = ((hsv[..., 0] < 12) | (hsv[..., 0] > 168)) & (hsv[..., 1] > 90) & (hsv[..., 2] > 60)
+        mask = ((Hh < 12) | (Hh > 168)) & (Ss > 90) & (Vv > 60)
     else:
-        mask = (hsv[..., 2] < 95) & (hsv[..., 1] < 130)
+        mask = (Vv < 95) & (Ss < 130)
     mask = (mask.astype(np.uint8)) * 255
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
     cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     # Ignore the top quarter (rank corner); the centre pip is the biggest blob.
-    sh = strip.shape[0]
     cnts = [c for c in cnts if cv2.moments(c)["m00"] and
-            (cv2.moments(c)["m01"] / cv2.moments(c)["m00"]) > 0.30 * sh]
+            (cv2.moments(c)["m01"] / cv2.moments(c)["m00"]) > 0.30 * fh]
     if not cnts:
         return None
     c = max(cnts, key=cv2.contourArea)

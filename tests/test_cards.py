@@ -26,12 +26,14 @@ def test_norm_rank(text, expected):
     assert _norm_rank(text) == expected
 
 
-def test_classify_suit_centroids():
-    # Feature points near each suit's reference centroid classify correctly.
-    assert _classify_suit("black", 0.76, 0.51) == "c"
-    assert _classify_suit("black", 0.92, 0.61) == "s"
-    assert _classify_suit("red", 0.90, 0.46) == "d"
-    assert _classify_suit("red", 0.95, 0.64) == "h"
+def test_classify_suit_on_real_feature_values():
+    # Real (solidity, extent) measured across two table themes.
+    assert _classify_suit("black", 0.762, 0.507) == "c"  # Jc
+    assert _classify_suit("black", 0.807, 0.665) == "c"  # 6c (the one that misread)
+    assert _classify_suit("black", 0.911, 0.573) == "s"  # 4s
+    assert _classify_suit("black", 0.907, 0.587) == "s"  # 9s
+    assert _classify_suit("red", 0.882, 0.475) == "d"    # Kd
+    assert _classify_suit("red", 0.947, 0.644) == "h"    # 8h
 
 
 def test_classify_suit_respects_colour():
