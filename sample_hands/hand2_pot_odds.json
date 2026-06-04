@@ -1,0 +1,37 @@
+{
+  "hand_id": "synthetic-002-pot-odds-draw",
+  "table": { "max_seats": 6, "small_blind": 1, "big_blind": 2 },
+  "hero_seat": 3,
+  "button_seat": 1,
+  "players": [
+    { "seat": 1, "position": "BTN", "starting_stack": 200 },
+    { "seat": 2, "position": "SB",  "starting_stack": 200 },
+    { "seat": 3, "position": "BB",  "starting_stack": 200 },
+    { "seat": 4, "position": "UTG", "starting_stack": 200 },
+    { "seat": 5, "position": "MP",  "starting_stack": 200 },
+    { "seat": 6, "position": "CO",  "starting_stack": 200 }
+  ],
+  "hero_hole_cards": ["Ah", "5h"],
+  "board": { "flop": ["Kh", "9h", "2c"], "turn": "2d", "river": "Qh" },
+  "actions": [
+    { "street": "preflop", "seat": 2, "action": "post",  "amount": 1 },
+    { "street": "preflop", "seat": 3, "action": "post",  "amount": 2 },
+    { "street": "preflop", "seat": 4, "action": "fold" },
+    { "street": "preflop", "seat": 5, "action": "fold" },
+    { "street": "preflop", "seat": 6, "action": "raise", "amount": 6 },
+    { "street": "preflop", "seat": 1, "action": "fold" },
+    { "street": "preflop", "seat": 2, "action": "fold" },
+    { "street": "preflop", "seat": 3, "action": "call",  "amount": 4 },
+
+    { "street": "flop", "seat": 3, "action": "check" },
+    { "street": "flop", "seat": 6, "action": "bet",   "amount": 6 },
+    { "street": "flop", "seat": 3, "action": "call",  "amount": 6 },
+
+    { "street": "turn", "seat": 3, "action": "check" },
+    { "street": "turn", "seat": 6, "action": "check" },
+
+    { "street": "river", "seat": 3, "action": "bet",   "amount": 12 },
+    { "street": "river", "seat": 6, "action": "call",  "amount": 12 }
+  ],
+  "result": { "winning_seats": [3], "pot": 49, "hero_net": 25 }
+}
