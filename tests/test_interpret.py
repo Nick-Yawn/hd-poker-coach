@@ -135,3 +135,28 @@ def test_interpret_without_hero_name_marks_no_hero():
     st = interpret(_real_frame_tokens())
     assert st.hero is None
     assert len(st.seats) == 7
+
+
+def test_interpret_assigns_bets_to_nearest_seat():
+    # A bet pill just toward the centre from a seat is claimed by that seat.
+    tokens = [
+        _tok("250/500", 0.10, 0.09),
+        _tok("SlowBet25", 0.50, 0.80), _tok("160.5K", 0.50, 0.82),
+        _tok("maxfreddie", 0.68, 0.78), _tok("52.85K", 0.68, 0.79),
+        _tok("500", 0.50, 0.68),   # SlowBet25's blind, just above the seat
+        _tok("250", 0.66, 0.69),   # maxfreddie's blind
+    ]
+    st = interpret(tokens, hero_name="SlowBet25")
+    bets = {s.name: s.bet for s in st.seats}
+    assert bets["SlowBet25"] == 500.0
+    assert bets["maxfreddie"] == 250.0
+
+
+def test_interpret_stack_not_misread_as_bet():
+    # The stack below a name must not also be claimed as a bet.
+    tokens = [
+        _tok("SlowBet25", 0.50, 0.80), _tok("160.5K", 0.50, 0.82),
+    ]
+    st = interpret(tokens, hero_name="SlowBet25")
+    assert st.seats[0].stack == 160_500.0
+    assert st.seats[0].bet is None

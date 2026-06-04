@@ -26,6 +26,9 @@ _BLINDS_RE = re.compile(r"^(\d[\d,]*(?:\.\d+)?[KMB]?)\s*/\s*(\d[\d,]*(?:\.\d+)?[
 _CHAT_RE = re.compile(r"\b\d{1,2}:\d{2}\s*(?:AM|PM)?\b", re.I)
 _MULT = {"": 1, "K": 1_000, "M": 1_000_000, "B": 1_000_000_000}
 
+# Max distance (frame fractions) from a seat to claim a bet pill as that seat's.
+_BET_RADIUS = 0.18
+
 # Action labels HD Poker paints under players, normalized.
 _ACTIONS = {
     "FOLD": "fold", "FOLDED": "fold",
@@ -122,6 +125,7 @@ def interpret(
             break
 
     # Pot: an amount adjacent to a 'MAIN POT'/'POT' label, else skip.
+    pot_tok = None
     pot_label = next(
         (t for t in body if t.text.strip().upper() in ("MAIN POT", "POT")), None
     )
@@ -133,7 +137,8 @@ def interpret(
         ]
         near = [a for a in amounts if a[0] < 0.12]
         if near:
-            state.pot = parse_amount(min(near)[1].text)
+            pot_tok = min(near)[1]
+            state.pot = parse_amount(pot_tok.text)
 
     # Seats: anchor on a name token with a stack amount just below it.
     names = [t for t in body if _looks_like_name(t)]
@@ -164,6 +169,32 @@ def interpret(
                 cy=name_tok.cy,
             )
         )
+
+    # Bets: leftover amounts in the play area, matched to the nearest seat
+    # (chips wagered sit between a player and the pot, toward the centre).
+    claimed = set(used_amounts)
+    if pot_tok is not None:
+        claimed.add(id(pot_tok))
+    bet_candidates = [
+        t for t in amount_tokens
+        if id(t) not in claimed and 0.18 < t.cy < 0.82
+    ]
+    pairs = []
+    for si, seat in enumerate(seats):
+        for t in bet_candidates:
+            dx, dy = t.cx - seat.cx, t.cy - seat.cy
+            d2 = dx * dx + dy * dy
+            if d2 < _BET_RADIUS * _BET_RADIUS:
+                pairs.append((d2, si, t))
+    pairs.sort(key=lambda p: p[0])
+    seat_done: set[int] = set()
+    bet_done: set[int] = set()
+    for d2, si, t in pairs:
+        if si in seat_done or id(t) in bet_done:
+            continue
+        seats[si].bet = parse_amount(t.text)
+        seat_done.add(si)
+        bet_done.add(id(t))
 
     # Hero: the seat whose name best matches the configured hero name.
     if hero_name and seats:
