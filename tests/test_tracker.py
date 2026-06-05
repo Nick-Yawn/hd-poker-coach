@@ -174,6 +174,24 @@ def test_tracker_starts_hand_with_only_big_blind_read():
     assert len(posts) == 1
 
 
+def test_tracker_starts_on_preflop_tag_then_defers_positions():
+    # The PRE-FLOP tag starts the hand even before any bet is read; positions are
+    # anchored later when the BB pill appears.
+    tracker = HandTracker(hero_name="hero", confirm_frames=1)
+    s1 = _state([_seat("alice"), _seat("bob"), _seat("hero", hole=["Ah", "Kd"])])
+    s1.street_label = "preflop"
+    tracker.observe(s1)
+    assert tracker.in_hand is True
+    assert tracker._hand.positions_done is False  # no BB yet
+
+    s2 = _state([_seat("alice", bet=10.0), _seat("bob"),
+                 _seat("hero", hole=["Ah", "Kd"])])
+    s2.street_label = "preflop"
+    tracker.observe(s2)
+    assert tracker._hand.positions_done is True   # BB anchored positions
+    assert any(p["action"] == "post" for p in tracker._hand.actions)
+
+
 def test_tracker_rejects_implausible_board():
     # A frame reading 6+ "cards" (animation garble) must not advance the board.
     tracker = HandTracker(hero_name="hero", confirm_frames=1)

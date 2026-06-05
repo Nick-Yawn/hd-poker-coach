@@ -73,6 +73,7 @@ class _Hand:
     actions: list[dict] = field(default_factory=list)
     street: str = "preflop"
     hero_hole_cards: list[str] | None = None
+    positions_done: bool = False  # set once the BB anchors positions
     # committed[street][name] = chips that seat has put in this street so far
     committed: dict = field(default_factory=lambda: {"preflop": {}})
 
@@ -165,45 +166,65 @@ class HandTracker:
 
     # -- lifecycle ---------------------------------------------------------- #
     def _maybe_start_hand(self, state: TableState, board: list[str] | None) -> None:
-        # A new hand begins at confirmed preflop (empty board) with the big blind
-        # posted. We anchor on the BB alone — it's the larger, more reliably-read
-        # pill, and it fixes every position (button = 2 seats before BB) without
-        # needing to also catch the small blind in the same frame.
+        # A new hand begins at an empty board signalled as live. The PRE-FLOP tag
+        # the hero widget shows is the reliable trigger (it persists the whole
+        # preflop street); a posted BB is the fallback when the tag isn't read.
+        # Positions need the BB, but that's DEFERRED — read whenever it appears
+        # during preflop — so a missed BB-pill frame no longer blocks the start.
         if board is None or len(board) != 0:
             return
-        if not state.big_blind:
-            return
-        posters = [s for s in state.seats if s.bet and s.bet > 0]
-        bb = next((s for s in posters if _close(s.bet, state.big_blind)), None)
-        if bb is None:
-            return
-        sb = next((s for s in posters if _close(s.bet, state.small_blind)), None)
+        preflop_tag = state.street_label == "preflop"
+        bb = None
+        if state.big_blind:
+            bb = next(
+                (s for s in state.seats if s.bet and _close(s.bet, state.big_blind)),
+                None,
+            )
+        if not preflop_tag and bb is None:
+            return  # empty board but nothing says a hand is actually live
 
         players = self._roster(state)
         if len(players) < 2:
             return
-        self._assign_positions(players, bb_name=bb.name)
 
-        hand = _Hand(
-            small_blind=state.small_blind,
-            big_blind=state.big_blind,
+        self._hand = _Hand(
+            small_blind=state.small_blind or 0.0,
+            big_blind=state.big_blind or 0.0,
             players=players,
             hero_name=self.hero_name,
         )
-        # Record the blind posts as actions (the SB may not have been read).
+        # The chat feed still shows PREVIOUS hands' "won" lines. Mark everything
+        # currently visible as seen so only a genuinely new win ends THIS hand.
+        self._seen_chat.update(state.chat)
+        self._try_assign_positions(state)  # best-effort now; retried in preflop
+
+    def _try_assign_positions(self, state: TableState) -> None:
+        """Anchor positions + record blind posts once the BB pill is readable."""
+        hand = self._hand
+        if hand is None or hand.positions_done or not state.big_blind:
+            return
+        bb = next(
+            (s for s in state.seats if s.bet and _close(s.bet, state.big_blind)), None
+        )
+        if bb is None:
+            return
+        self._assign_positions(hand.players, bb_name=bb.name)
+        hand.positions_done = True
+
+        sb = next(
+            (s for s in state.seats if s.bet and _close(s.bet, state.small_blind)), None
+        )
         for s in (sb, bb):
             if s is None:
                 continue
             p = hand.player_by_name(s.name)
-            if p:
+            if p and not any(
+                a["action"] == "post" and a["seat"] == p.seat for a in hand.actions
+            ):
                 hand.actions.append(
                     {"street": "preflop", "seat": p.seat, "action": "post", "amount": s.bet}
                 )
                 hand.committed["preflop"][p.name] = s.bet
-        self._hand = hand
-        # The chat feed still shows PREVIOUS hands' "won" lines. Mark everything
-        # currently visible as seen so only a genuinely new win ends THIS hand.
-        self._seen_chat.update(state.chat)
 
     def _roster(self, state: TableState) -> list[_Player]:
         """Seats with a known stack become players, numbered clockwise."""
@@ -234,6 +255,11 @@ class HandTracker:
     def _apply_to_hand(self, state: TableState, board: list[str] | None) -> None:
         hand = self._hand
         assert hand is not None
+
+        # Positions were deferred at hand-start; keep trying to anchor them on the
+        # BB while we're still preflop.
+        if not hand.positions_done and hand.street == "preflop":
+            self._try_assign_positions(state)
 
         # Capture the hero's hole cards the first time we can read them.
         if hand.hero_hole_cards is None:
