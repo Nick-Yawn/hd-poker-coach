@@ -188,8 +188,10 @@ class HandTracker:
             players=players,
             hero_name=self.hero_name,
         )
-        # Record the blind posts as actions.
+        # Record the blind posts as actions (the SB may not have been read).
         for s in (sb, bb):
+            if s is None:
+                continue
             p = hand.player_by_name(s.name)
             if p:
                 hand.actions.append(

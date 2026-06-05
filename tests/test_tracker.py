@@ -158,6 +158,22 @@ def test_tracker_output_feeds_m1_analysis_and_coaching():
     assert len(notes) == len(decisions)
 
 
+def test_tracker_starts_hand_with_only_big_blind_read():
+    # Live, we often catch only the BB pill. Hand-start must work (and not crash)
+    # when the SB wasn't read.
+    tracker = HandTracker(hero_name="hero", confirm_frames=1)
+    seats = [
+        _seat("alice", bet=10.0),  # BB only; no SB bet present
+        _seat("bob"), _seat("carol"),
+        _seat("hero", hole=["Ah", "Kd"]),
+    ]
+    tracker.observe(_state(seats))
+    assert tracker.in_hand is True
+    # BB recorded as a post; no crash on the missing SB.
+    posts = [a for a in tracker._hand.actions if a["action"] == "post"]
+    assert len(posts) == 1
+
+
 def test_tracker_rejects_implausible_board():
     # A frame reading 6+ "cards" (animation garble) must not advance the board.
     tracker = HandTracker(hero_name="hero", confirm_frames=1)
