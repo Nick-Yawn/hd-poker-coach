@@ -150,7 +150,9 @@ class HandTracker:
         Rejects impossible reads (more than 5 cards). Returns None until a
         reading is confirmed; the last confirmed board persists in the hand.
         """
-        if raw is None or len(raw) > 5:
+        # Reject impossible reads (>5) and any board with an unresolved suit
+        # ('J?'): wait for a clean read rather than confirm/emit invalid cards.
+        if raw is None or len(raw) > 5 or any("?" in c for c in raw):
             return None
         if raw == self._cand_board:
             self._cand_count += 1

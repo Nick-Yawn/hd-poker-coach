@@ -100,9 +100,20 @@ def name_similarity(a: str, b: str) -> float:
 # --------------------------------------------------------------------------- #
 # Interpretation
 # --------------------------------------------------------------------------- #
+_STREET_LABELS = {"PREFLOP": "preflop", "FLOP": "flop", "TURN": "turn", "RIVER": "river"}
+
+
+def street_label_of(text: str) -> str | None:
+    """Map an HD Poker street tag (PRE-FLOP/FLOP/TURN/RIVER) to a street name."""
+    return _STREET_LABELS.get(re.sub(r"[^A-Za-z]", "", text).upper())
+
+
 def _looks_like_name(token: Token) -> bool:
     t = token.text.strip()
-    if len(t) < 3 or t.upper() in _STOPWORDS:
+    # Compare against the stopword list with punctuation stripped, so "ALL IN!"
+    # and "MAIN POT" variants don't slip through as phantom player names.
+    cleaned = re.sub(r"[^A-Z0-9 ]", "", t.upper()).strip()
+    if len(t) < 3 or cleaned in _STOPWORDS or street_label_of(t) is not None:
         return False
     if parse_amount(t) is not None or parse_blinds(t) is not None:
         return False
@@ -216,6 +227,20 @@ def interpret(
             best.is_hero = True
 
     state.seats = seats
+
+    # Street label (PRE-FLOP/FLOP/TURN/RIVER) shown by the hero widget. Prefer
+    # the one nearest the hero; it's a robust hand-start/street signal.
+    labels = [(t, street_label_of(t.text)) for t in body]
+    labels = [(t, lab) for t, lab in labels if lab]
+    if labels:
+        hero = state.hero
+        if hero is not None:
+            tok = min(labels, key=lambda tl: (tl[0].cx - hero.cx) ** 2
+                      + (tl[0].cy - hero.cy) ** 2)
+            state.street_label = tok[1]
+        else:
+            state.street_label = labels[0][1]
+
     return state
 
 
