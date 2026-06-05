@@ -41,6 +41,7 @@ class TableState:
     pot: float | None = None
     board: list[str] = field(default_factory=list)  # card reader fills this
     street_label: str | None = None  # 'preflop'/'flop'/'turn'/'river' if shown
+    button_name: str | None = None   # seat name marked with the dealer button
     seats: list[SeatState] = field(default_factory=list)
     hero_name: str | None = None
     chat: list[str] = field(default_factory=list)

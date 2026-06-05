@@ -93,6 +93,8 @@ def recognize(frame, *, hero_name=None):
     from .interpret import interpret
     from .ocr import read_tokens
 
+    from .button import find_button_name
+
     tokens = read_tokens(frame)
     state = interpret(tokens, hero_name=hero_name)
     board_located = read_board_located(frame)
@@ -100,6 +102,7 @@ def recognize(frame, *, hero_name=None):
         cards = read_hero_hole_cards(frame, state.hero.cx, state.hero.cy)
         if len(cards) == 2:
             state.hero.hole_cards = cards
+    state.button_name = find_button_name(frame, state.seats)
     return tokens, state, board_located
 
 

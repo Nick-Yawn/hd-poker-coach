@@ -199,22 +199,35 @@ class HandTracker:
         self._try_assign_positions(state)  # best-effort now; retried in preflop
 
     def _try_assign_positions(self, state: TableState) -> None:
-        """Anchor positions + record blind posts once the BB pill is readable."""
+        """Anchor positions once we can — preferring the dealer-button glyph
+        (most reliable), falling back to the BB pill — and record blind posts."""
         hand = self._hand
-        if hand is None or hand.positions_done or not state.big_blind:
+        if hand is None or hand.positions_done:
             return
-        bb = next(
-            (s for s in state.seats if s.bet and _close(s.bet, state.big_blind)), None
-        )
-        if bb is None:
-            return
-        self._assign_positions(hand.players, bb_name=bb.name)
-        hand.positions_done = True
 
-        sb = next(
-            (s for s in state.seats if s.bet and _close(s.bet, state.small_blind)), None
-        )
-        for s in (sb, bb):
+        if state.button_name and hand.player_by_name(state.button_name):
+            self._assign_positions(hand.players, button_name=state.button_name)
+            hand.positions_done = True
+        elif state.big_blind:
+            bb = next(
+                (s for s in state.seats if s.bet and _close(s.bet, state.big_blind)),
+                None,
+            )
+            if bb is None:
+                return
+            self._assign_positions(hand.players, bb_name=bb.name)
+            hand.positions_done = True
+        else:
+            return
+
+        # Record blind posts when the pills are readable (independent of how we
+        # anchored positions).
+        for amount in (state.small_blind, state.big_blind):
+            if not amount:
+                continue
+            s = next(
+                (x for x in state.seats if x.bet and _close(x.bet, amount)), None
+            )
             if s is None:
                 continue
             p = hand.player_by_name(s.name)
@@ -238,19 +251,26 @@ class HandTracker:
             )
         return players
 
-    def _assign_positions(self, players: list[_Player], *, bb_name) -> None:
+    def _assign_positions(self, players, *, button_name=None, bb_name=None) -> None:
+        """Assign positions by clockwise rotation from the button. The button is
+        located either directly (the dealer-button glyph) or via the BB (2 seats
+        before BB; 1 heads-up)."""
         n = len(players)
         names = _POSITIONS.get(n)
         if not names:
             return
-        # players are clockwise; find BB, then walk back to the button. Heads-up
-        # the button is the SB (1 before BB); otherwise it's 2 before BB.
         order = players  # already clockwise by _roster
-        bb_idx = max(range(n), key=lambda i: name_similarity(order[i].name, bb_name))
-        button_idx = (bb_idx - (1 if n == 2 else 2)) % n
+        if button_name is not None:
+            button_idx = max(
+                range(n), key=lambda i: name_similarity(order[i].name, button_name)
+            )
+        elif bb_name is not None:
+            bb_idx = max(range(n), key=lambda i: name_similarity(order[i].name, bb_name))
+            button_idx = (bb_idx - (1 if n == 2 else 2)) % n
+        else:
+            return
         for offset in range(n):
-            p = order[(button_idx + offset) % n]
-            p.position = names[offset]
+            order[(button_idx + offset) % n].position = names[offset]
 
     def _apply_to_hand(self, state: TableState, board: list[str] | None) -> None:
         hand = self._hand

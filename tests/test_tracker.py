@@ -192,6 +192,19 @@ def test_tracker_starts_on_preflop_tag_then_defers_positions():
     assert any(p["action"] == "post" for p in tracker._hand.actions)
 
 
+def test_tracker_uses_button_glyph_for_positions():
+    # The dealer-button glyph anchors positions directly (button = that seat),
+    # without needing the blinds.
+    tracker = HandTracker(hero_name="hero", confirm_frames=1)
+    st = _state([_seat("alice"), _seat("bob"), _seat("hero", hole=["Ah", "Kd"])])
+    st.street_label = "preflop"
+    st.button_name = "alice"
+    tracker.observe(st)
+    assert tracker._hand.positions_done is True
+    btn = [p for p in tracker._hand.players if p.position == "BTN"]
+    assert btn and btn[0].name == "alice"
+
+
 def test_tracker_rejects_implausible_board():
     # A frame reading 6+ "cards" (animation garble) must not advance the board.
     tracker = HandTracker(hero_name="hero", confirm_frames=1)

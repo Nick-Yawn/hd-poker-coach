@@ -3,9 +3,9 @@
 A simple running list. Post-hand Hold'em study coach for HD Poker.
 
 ## Now (action reconstruction — the open problem)
-- [ ] **Dealer-button glyph** detection → which nameplate is the button →
-      positions by clockwise rotation around the table centroid (drop blind
-      dependence)
+- [x] **Dealer-button glyph** detection → teal "D" badge at the plate's inside
+      bottom-right → button seat → positions by clockwise rotation (validated on
+      two real frames; preferred over blinds, BB fallback kept)
 - [ ] **Record real hands** with known action sequences → end-to-end test
       fixtures (anonymize player names; the buffered pipeline is the recorder)
 - [ ] **Action reconstructor**: bet-pill deltas + active-player highlight +
