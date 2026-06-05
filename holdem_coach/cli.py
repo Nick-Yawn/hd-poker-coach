@@ -95,7 +95,7 @@ def render_review(
 
 def _run_track(args) -> int:
     """Live loop: print a post-hand review whenever a hand completes."""
-    from .capture.live import run_tracker
+    from .capture.pipeline import run_buffered_tracker
 
     def on_event(kind, tracker):
         if kind == "hand-start":
@@ -141,7 +141,7 @@ def _run_track(args) -> int:
         flush=True,
     )
     try:
-        n = run_tracker(
+        n = run_buffered_tracker(
             args.window, hero_name=args.hero, on_hand=on_hand, on_event=on_event,
             seconds=args.seconds, on_state=on_state if args.debug else None,
         )
